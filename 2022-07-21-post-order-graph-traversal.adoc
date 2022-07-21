@@ -7,7 +7,8 @@ A linear algorithm for this problem would require post order traversal of the gr
 
 As is sometimes the case, implementing the algorithm using recursion is easier so that was my first attempt.
 
-`
+[source,rust]
+----
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -35,11 +36,52 @@ impl Solution {
         avg
     }
 }
-`
+----
 
-A recursive implementation can be risky for very deep trees, as we will have a lot of stack frames and potentially run out of stack space.  An iterative approach is sometimes preferable in such cases.  Before I show the iterative solution in Rust, I think it is worth looking at an interative solution in Python.  I show this solution because I was unable to implement it in Rust due to some the restrictions that the language has and I had to come up with another approach.
+A recursive implementation can be risky for very deep trees, as we will have a lot of stack frames and potentially run out of stack space.  An iterative approach is sometimes preferable in such cases.  Before I show the iterative solution in Rust, I think it is worth looking at an interative solution in Python.  I show this solution because I was unable to implement something similar in Rust due to various restrictions that the language has.
 
-`
+[source,python]
+----
+from typing import Optional
+
+
+class TreeNode:
+    def __init__(self, val=0, left=None, right=None):
+        self.val = val
+        self.left = left
+        self.right = right
+
+
+class Solution:
+    def averageOfSubtree(self, root: Optional[TreeNode]) -> int:
+        stack = [root]
+        visiting = set()
+        visited = {None: (0, 0, 0)}
+        while stack:
+            node = stack.pop()
+            if node is None:
+                continue
+            if node in visiting:
+                left_total, left_nodes, left_avg = visited[node.left]
+                right_total, right_nodes, right_avg = visited[node.right]
+                total = left_total + right_total + node.val
+                nodes = left_nodes + right_nodes + 1
+                avg = left_avg + right_avg
+                if total // nodes == node.val:
+                    avg += 1
+                visited[node] = (total, nodes, avg)
+            else:
+                stack.append(node)
+                stack.append(node.left)
+                stack.append(node.right)
+                visiting.add(node)
+        return visited[root][2]
+----
+
+And here is the Rust implementation I came up with.
+
+[source,rust]
+----
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -84,4 +126,4 @@ impl Solution {
         results[0].2
     }
 }
-`
+----
