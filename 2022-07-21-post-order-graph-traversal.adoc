@@ -1,9 +1,25 @@
-I have been thinking about how to implement common graph traversal algorithms in Rust.  Given Rust's ownership model, these algorithms can be a bit challenging to implement.  So I looked up problems on https://www.leetcode.com[leetcode].  I found a nice https://leetcode.com/problems/count-nodes-equal-to-average-of-subtree/[simple problem] to solve.
+= Post order graph traversal in Rust
+
+I have been thinking about how to implement common graph traversal algorithms in Rust.  Given Rust's ownership model, these algorithms can be a bit challenging to implement.  So I looked up problems on https://www.leetcode.com[leetcode] and found a nice https://leetcode.com/problems/count-nodes-equal-to-average-of-subtree/[one] to solve.
+
+Before we jump into the algorithm and the implementation, let's look at how a tree node is defined as part of the problem description by leetcode.
+
+[source,rust]
+----
+#[derive(Debug, PartialEq, Eq)]
+pub struct TreeNode {
+    pub val: i32,
+    pub left: Option<Rc<RefCell<TreeNode>>>,
+    pub right: Option<Rc<RefCell<TreeNode>>>,
+}
+----
+
+It is interesting to note that the children (left and right) are not stored as just raw `TreeNode`.  If you are unfamiliar with Rust, such a definition would create an infinitely deep data structure and the compiler will complain.  To fix the issue, the children could have been stored behind a `Box<>`.  That would be a valid data structure but it will be awkward to work with.  This is because we will not be able to store any references to nodes without deconstructing the whole tree.  Hence the choice of `RefCell<>` is a good one as it puts the children behind a reference counted pointer allowing us to store references to the children without perturbing the original tree.
 
 A linear algorithm for this problem would require post order traversal of the graph.  Essentially, for each node, we would compute the following three bits of information.
 - Sum of the subtree rooted at node which is computed as the sum of the subtree rooted at the two children plus the value of the node.
 - Number of nodes in the subtree rooted at node which is computed as the sum of number of nodes at the two children plus one.
-- Number of nodes in the subtree rooted at node that fullfil the requirements of the question which is computed as the sum of the nodes that fullfil the requirements of the question at the two children plus one if the current node also fullfils it.
+- Number of nodes in the subtree rooted at node that fulfill the requirements of the question which is computed as the sum of the nodes that fulfill the requirements of the question at the two children plus one if the current node also fulfills it.
 
 As is sometimes the case, implementing the algorithm using recursion is easier so that was my first attempt.
 
@@ -12,32 +28,15 @@ As is sometimes the case, implementing the algorithm using recursion is easier s
 use std::cell::RefCell;
 use std::rc::Rc;
 
-#[derive(Debug, PartialEq, Eq)]
-pub struct TreeNode {
-    pub val: i32,
-    pub left: Option<Rc<RefCell<TreeNode>>>,
-    pub right: Option<Rc<RefCell<TreeNode>>>,
-}
-
-impl TreeNode {
-    pub fn new(val: i32) -> Self {
-        TreeNode {
-            val,
-            left: None,
-            right: None,
-        }
-    }
-}
-
 struct Solution;
 
-fn get_avg(root: Option<Rc<RefCell<TreeNode>>>) -> (i32, i32, i32) {
+fn get_avg_of_subtree(root: Option<Rc<RefCell<TreeNode>>>) -> (i32, i32, i32) {
     match root {
         None => (0, 0, 0),
         Some(node) => {
             let node = node.borrow();
-            let (left_total, left_nodes, left_avg) = get_avg(node.left.clone());
-            let (right_total, right_nodes, right_avg) = get_avg(node.right.clone());
+            let (left_total, left_nodes, left_avg) = get_avg_of_subtree(node.left.clone());
+            let (right_total, right_nodes, right_avg) = get_avg_of_subtree(node.right.clone());
             let total = left_total + right_total + node.val;
             let nodes = left_nodes + right_nodes + 1;
             let mut avg = left_avg + right_avg;
@@ -51,13 +50,16 @@ fn get_avg(root: Option<Rc<RefCell<TreeNode>>>) -> (i32, i32, i32) {
 
 impl Solution {
     pub fn average_of_subtree(root: Option<Rc<RefCell<TreeNode>>>) -> i32 {
-        let (_, _, avg) = get_avg(root);
-        avg
+        get_avg_of_subtree(root).2
     }
 }
 ----
 
-A recursive implementation can be risky for very deep trees, as we will have a lot of stack frames and potentially run out of stack space.  An iterative approach is sometimes preferable in such cases.  Also an iterative solution is more challenging hence more interesting to look at.  Before I show the iterative solution in Rust, I think it is worth looking at an interative solution in Python.  I show this solution because I was unable to implement something similar in Rust due to various restrictions that the language has.
+The solution is fairly straightforward.  We first define the terminal condition (a `None` node) to stop the recursion; we define how to compute the desired stats for the current node for which we have to first compute the stats for its children.  As we have to visit the children before we can visit the parent, that makes this a post order graph traversal.  This solution should be correct, it at least passed all the tests on leetcode.
+
+A recursive implementation can be risky for very deep trees, as we will have a lot of stack frames and potentially run out of stack space.  An iterative approach is sometimes preferable in such cases.  Also an iterative solution is more challenging hence more interesting to look at.
+
+Before I show the iterative solution in Rust, I think it is worth looking at an interative solution in Python.  I show this solution because this is what I would have wanted to implement in Rust but I was unable to due to various restrictions in the language.
 
 [source,python]
 ----
@@ -96,6 +98,8 @@ class Solution:
                 visiting.add(node)
         return visited[root][2]
 ----
+
+We are using a stack to store the nodes that we still need to visit.  When we come across a node for the first time, we are not ready yet to visit it.  We need to visit its children first.  XXX
 
 And here is the Rust implementation I came up with.
 
