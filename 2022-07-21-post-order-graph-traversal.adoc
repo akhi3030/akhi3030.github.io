@@ -77,14 +77,17 @@ class Solution:
     def averageOfSubtree(self, root: Optional[TreeNode]) -> int:
         stack = [root]
         visiting = set()
-        visited = {None: (0, 0, 0)}
+        visited = {}
         while stack:
             node = stack.pop()
             if node is None:
                 continue
             if node in visiting:
-                left_total, left_nodes, left_avg = visited[node.left]
-                right_total, right_nodes, right_avg = visited[node.right]
+                visiting.remove(node)
+                left_total, left_nodes, left_avg = visited.pop(
+                    node.left, (0, 0, 0))
+                right_total, right_nodes, right_avg = visited.pop(
+                    node.right, (0, 0, 0))
                 total = left_total + right_total + node.val
                 nodes = left_nodes + right_nodes + 1
                 avg = left_avg + right_avg
@@ -96,10 +99,14 @@ class Solution:
                 stack.append(node.left)
                 stack.append(node.right)
                 visiting.add(node)
-        return visited[root][2]
+        return visited.get(root, (0, 0, 0))[2]
 ----
 
-We are using a stack to store the nodes that we still need to visit.  When we come across a node for the first time, we are not ready yet to visit it.  We need to visit its children first.  XXX
+We are using a stack to store the nodes that we still need to visit.  When we come across a node for the first time, we are not ready to visit it yet.  We need to visit its children first.  So we put it back in the stack and we put its chidren in the stack.  The next time we across the node, we should be able to visit it.  To help us track this bit of information, we also store it in the `visiting` set.
+
+When we are finally able to visit a node, we compute the require bits of information and we store the results in the `visited` dictionary so that when we visit the parent, it can look up the result.
+
+Note that we are removing elements from the set and dictionary as go along.  If we did not do that, the size of these data structures would eventually grow to contain all the nodes in the tree.  In the worst case (where the tree is really just a straight line, e.g. all nodes just have a left child), that can still happen with the above code but it allows us to lower the space consumption to the maximum depth of the tree.
 
 And here is the Rust implementation I came up with.
 
