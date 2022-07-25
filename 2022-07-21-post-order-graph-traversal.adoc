@@ -110,9 +110,12 @@ And here is the Rust implementation I came up with.
 fn average_of_subtree(root: Option<Rc<RefCell<TreeNode>>>) -> i32 {
     // vector to store results from intermediate nodes
     let mut results: Vec<(i32, i32, i32)> = vec![];
-    // Stack to visit all nodes in pre-order traversal
+    // Stack to visit all nodes in pre-order traversal.  The first element in 
+    // the tuple is the node and the second is the parent's index in results.
     let mut stack0: Vec<(Option<Rc<RefCell<TreeNode>>>, Option<usize>)> = vec![(root, None)];
-    // Stack to visit all nodes in post-order traversal
+    // Stack to visit all nodes in post-order traversal.  The first element 
+    // in the tuple is the node, the second is the node's index in results 
+    // and the third is parent's index in results.
     let mut stack1: Vec<(Rc<RefCell<TreeNode>>, usize, Option<usize>)> = vec![];
 
     // Iterate over all nodes in pre-order and insert them into stack1 in post-order.
