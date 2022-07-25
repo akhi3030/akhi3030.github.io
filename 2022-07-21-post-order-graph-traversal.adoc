@@ -61,7 +61,7 @@ The solution is fairly straightforward.  We first define the terminal condition 
 
 A recursive implementation can be risky for very deep trees, as we will have a lot of stack frames and potentially run out of stack space.  An iterative approach is sometimes preferable in such cases as it moves the memory allocations to the heap which tend to be larger.  Also an iterative solution is more challenging hence more interesting to look at.
 
-Before I show the iterative solution in Rust, I think it is worth looking at an interative solution in Python.  I show this solution because this is what I first tried to but failed to implement in Rust due to various restrictions in the language.
+Before I show the iterative solution in Rust, I think it is worth looking at an interative solution in Python.  I show this solution because this is what I wanted to implement in Rust as well.  However, what I ended up implementing is slightly different due to various language restrictions.
 
 [source,python]
 ----
@@ -178,3 +178,9 @@ impl Solution {
     }
 }
 ----
+
+The main complication with the above algorithm in Rust is that we cannot hash `RefCell<>` which means that we cannot use `HashMap` or `HashSet`.  I do not understand all the details behind this restriction but at a high level it makes sense because `RefCell<>` enables interior mutability so it does not make sense to be able to hash something that can change after we have computed its hash.
+
+As I could not use a `HashSet` for `visiting`, I ended up using two loops instead.  In the first loop, I lay out all the nodes in the stack in the post order traversal order.  When the first loop finishes, the order in which the nodes will be popped from `stack1` should guarantee that we will always visit children before visiting parents.
+
+Then as I could use a `HashMap` for storing results for intermediate nodes, I ended up implementing a "poor man's" hash map.  I instead have a `results` `Vec` which stores results for the intermidiate nodes.  And when I am adding nodes to `stack1`, I also associates indexes with nodes so that in the second loop they can update the appropriate index in `results`.  I admit that this is not nice to read and can probably be improved.  I wold love to hear feedback on it.  
