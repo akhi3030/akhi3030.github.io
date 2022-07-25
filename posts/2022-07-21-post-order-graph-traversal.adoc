@@ -1,0 +1,170 @@
+= Post order graph traversal in Rust
+
+I have been thinking about how to implement common graph traversal algorithms in Rust.  Given Rust's ownership model, these algorithms can be a bit challenging to implement.  So I looked up problems on https://www.leetcode.com[leetcode] and found a nice https://leetcode.com/problems/count-nodes-equal-to-average-of-subtree/[one] to solve.
+
+Before we jump into the algorithm and the implementation, let's look at how a tree node is defined as part of the problem description by leetcode.
+
+[source,rust]
+----
+#[derive(Debug, PartialEq, Eq)]
+pub struct TreeNode {
+    pub val: i32,
+    pub left: Option<Rc<RefCell<TreeNode>>>,
+    pub right: Option<Rc<RefCell<TreeNode>>>,
+}
+----
+
+The children are behind a `Option` because a node may or may not have children.  It is interesting to note that the children are not stored as `Option<TreeNode>`.  If you are unfamiliar with Rust, such a definition would create an infinitely deep data structure and the compiler will complain.  To fix the issue, the children could have been stored behind a `Box<>`.  That would be a valid data structure but it will be awkward to work with.  This is because we will not be able to store any references to children without deconstructing the tree.  Hence the use `RefCell<>` makes sense here as it puts the children behind a reference counted pointer allowing us to store references to the children without perturbing the original tree.  
+
+NOTE: Using `RefCell<>` now allows the callee the ability to make changes to the tree.  If the tree were stored using `Box<>`s, then the callee would need to receive the tree as a mutable reference to be able to make changes to it.  This way the caller has no guarantee that the callee has not made changes to the tree.  Maybe there is a reference counted pointer in Rust that does not allow mutable access to the callee?
+
+A linear algorithm for this problem would require post order traversal of the graph.  Essentially, for each node, we would compute and return the following three bits of information:
+- Sum of the subtree rooted at node which is computed as the sum of the subtree rooted at the two children plus the value of the node.
+- Number of nodes in the subtree rooted at node which is computed as the sum of number of nodes at the two children plus one.
+- Number of nodes in the subtree rooted at node that fulfill the requirements of the question which is computed as the sum of the nodes that fulfill the requirements of the question at the two children plus one if the current node also fulfills it.
+
+As is sometimes the case, implementing the algorithm using recursion is easier so that was my first attempt.
+
+[source,rust]
+----
+fn get_avg_of_subtree(root: Option<Rc<RefCell<TreeNode>>>) -> (i32, i32, i32) {
+    match root {
+        None => (0, 0, 0),
+        Some(node) => {
+            let node = node.borrow();
+            let (left_total, left_nodes, left_avg) = get_avg_of_subtree(node.left.clone());
+            let (right_total, right_nodes, right_avg) = get_avg_of_subtree(node.right.clone());
+            let total = left_total + right_total + node.val;
+            let nodes = left_nodes + right_nodes + 1;
+            let mut avg = left_avg + right_avg;
+            if total / nodes == node.val {
+                avg += 1;
+            }
+            (total, nodes, avg)
+        }
+    }
+}
+
+fn average_of_subtree(root: Option<Rc<RefCell<TreeNode>>>) -> i32 {
+    get_avg_of_subtree(root).2
+}
+----
+
+The solution is fairly straightforward.  We first define the terminal condition (a `None` node) to stop the recursion; we then define how to compute the desired stats for the current node for which we have to first compute the stats for its children.  As we have to visit the children before we can visit the parent, that makes this a post order graph traversal.  Note the use of `clone()` when we visit children.  This `clone()` is cheap as we are cloning something behind a `RefCell` so it is just incrementing the reference count in the smart pointer.  This solution should be correct, at least it passed all the tests on leetcode.
+
+A recursive implementation can be risky for very deep trees, as we will have a lot of stack frames and potentially run out of stack space.  An iterative approach is sometimes preferable in such cases as it moves the memory allocations to the heap which tend to be larger.  Also an iterative solution is more challenging hence more interesting to look at.
+
+Before I show the iterative solution in Rust, I think it is worth looking at an interative solution in Python.  I show this solution because this is what I wanted to implement in Rust as well.  However, what I ended up implementing is slightly different due to various language restrictions.
+
+[source,python]
+----
+from typing import Optional
+
+
+class TreeNode:
+    def __init__(self, val=0, left=None, right=None):
+        self.val = val
+        self.left = left
+        self.right = right
+
+
+class Solution:
+    def averageOfSubtree(self, root: Optional[TreeNode]) -> int:
+        stack = [root]
+        visiting = set()
+        visited = {}
+        while stack:
+            node = stack.pop()
+            if node is None:
+                continue
+            if node in visiting:
+                visiting.remove(node)
+                left_total, left_nodes, left_avg = visited.pop(
+                    node.left, (0, 0, 0))
+                right_total, right_nodes, right_avg = visited.pop(
+                    node.right, (0, 0, 0))
+                total = left_total + right_total + node.val
+                nodes = left_nodes + right_nodes + 1
+                avg = left_avg + right_avg
+                if total // nodes == node.val:
+                    avg += 1
+                visited[node] = (total, nodes, avg)
+            else:
+                stack.append(node)
+                stack.append(node.left)
+                stack.append(node.right)
+                visiting.add(node)
+        return visited.get(root, (0, 0, 0))[2]
+----
+
+We are using a stack to store the nodes that we still need to visit.  When we come across a node for the first time, we are not ready to visit it yet.  We need to visit its children first.  So we put it back in the stack and we put its chidren in the stack.  The next time we come across the node, we should be able to visit it.  To help us track this bit of information, we store it in the `visiting` set.
+
+When we are finally able to visit a node, we compute the required bits of information and we store the results in the `visited` dictionary so that when we visit the parent, it can look up the result.
+
+Note that we are removing elements from the set and dictionary as go along.  If we did not do that, the size of these data structures would eventually grow to contain all the nodes in the tree.  In the worst case (where the tree is really just a straight line, e.g. all nodes just have a left child), that can still happen with the above code but it allows us to lower the space consumption to the maximum depth of the tree.
+
+And here is the Rust implementation I came up with.
+
+[source,rust]
+----
+fn average_of_subtree(root: Option<Rc<RefCell<TreeNode>>>) -> i32 {
+    // vector to store results from intermediate nodes
+    let mut results: Vec<(i32, i32, i32)> = vec![];
+    // Stack to visit all nodes in pre-order traversal.  The first element in 
+    // the tuple is the node and the second is the parent's index in results.
+    let mut stack0: Vec<(Option<Rc<RefCell<TreeNode>>>, Option<usize>)> = vec![(root, None)];
+    // Stack to visit all nodes in post-order traversal.  The first element 
+    // in the tuple is the node, the second is the node's index in results 
+    // and the third is parent's index in results.
+    let mut stack1: Vec<(Rc<RefCell<TreeNode>>, usize, Option<usize>)> = vec![];
+
+    // Iterate over all nodes in pre-order and insert them into stack1 in post-order.
+    while let Some((node, parent_ind)) = stack0.pop() {
+        match node {
+            None => (),
+            Some(node) => {
+                {
+                    let node = node.borrow();
+                    stack0.push((node.right.clone(), Some(results.len())));
+                    stack0.push((node.left.clone(), Some(results.len())));
+                }
+                stack1.push((node, results.len(), parent_ind));
+                results.push((0, 0, 0));
+            }
+        }
+    }
+
+    while let Some((node, my_ind, parent_ind)) = stack1.pop() {
+        let (mut total, mut nodes, mut avg) = results[my_ind];
+        let node = node.borrow();
+        total += node.val;
+        nodes += 1;
+        if total / nodes == node.val {
+            avg += 1;
+        }
+        match parent_ind {
+            None => results[my_ind] = (total, nodes, avg),
+            Some(parent_ind) => {
+                let (mut ptotal, mut pnodes, mut pavg) = results[parent_ind];
+                ptotal += total;
+                pnodes += nodes;
+                pavg += avg;
+                results[parent_ind] = (ptotal, pnodes, pavg)
+            }
+        }
+    }
+    results[0].2
+}
+----
+
+The main complication with the above algorithm in Rust is that we cannot hash `RefCell<>` which means that we cannot use `HashMap` or `HashSet`.  I do not understand all the details behind this restriction but at a high level it makes sense because `RefCell<>` enables interior mutability so it does not make sense to be able to hash something that can change after we have computed its hash.
+
+As I could not use a `HashSet` for `visiting`, I ended up using two loops instead.  In the first loop, I lay out all the nodes in the stack in the post order traversal order.  When the first loop finishes, the order in which the nodes will be popped from `stack1` should guarantee that we will always visit children before visiting parents.
+
+Then as I could use a `HashMap` for storing results for intermediate nodes, I ended up implementing a "poor man's" hash map.  I instead have a `results` `Vec` which stores results for the intermidiate nodes.  And when I am adding nodes to `stack1`, I also associates indexes with nodes so that in the second loop they can update the appropriate index in `results`.
+
+Comparing this algorithm against the Python version:
+
+- Even though it may appear that we accessing nodes an extra time in this algorithm, that is not actually true.  In the Python version, we are visiting each node twice and we are doing the same here.  Here, we just do it under two different `while` loops.
+- We eager remove elements from the dictionary and the set in Python.  We are not able to do that in Rust.  In Rust, our worst case space consumption is higher.
+- I find the Python version a lot easier to read.  Rust version is more subtle and I believe one would need longer to convince themselves that it is correct.
