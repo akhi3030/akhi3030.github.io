@@ -174,7 +174,7 @@ As I could not use a `HashSet` for `visiting`, I ended up using two loops instea
 
 Then as I could use a `HashMap` for storing results for intermediate nodes, I ended up implementing a "poor man's" hash map.  I instead have a `results` `Vec` which stores results for the intermidiate nodes.  And when I am adding nodes to `stack1`, I also associates indexes with nodes so that in the second loop they can update the appropriate index in `results`.
 
-Comparing this algorithm against the Python version:
+Comparing this implementation against the Python version:
 
 - Even though it may appear that we accessing nodes an extra time in this algorithm, that is not actually true.  In the Python version, we are visiting each node twice and we are doing the same here.  Here, we just do it under two different `while` loops.
 - We eagerly removed elements from the dictionary and the set in Python but we are not doing that in Rust, hence in Rust, our worst case space consumption is higher.
