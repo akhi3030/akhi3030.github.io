@@ -27,11 +27,6 @@ As is sometimes the case, implementing the algorithm using recursion is easier s
 
 [source,rust]
 ----
-use std::cell::RefCell;
-use std::rc::Rc;
-
-struct Solution;
-
 fn get_avg_of_subtree(root: Option<Rc<RefCell<TreeNode>>>) -> (i32, i32, i32) {
     match root {
         None => (0, 0, 0),
@@ -50,10 +45,8 @@ fn get_avg_of_subtree(root: Option<Rc<RefCell<TreeNode>>>) -> (i32, i32, i32) {
     }
 }
 
-impl Solution {
-    pub fn average_of_subtree(root: Option<Rc<RefCell<TreeNode>>>) -> i32 {
-        get_avg_of_subtree(root).2
-    }
+fn average_of_subtree(root: Option<Rc<RefCell<TreeNode>>>) -> i32 {
+    get_avg_of_subtree(root).2
 }
 ----
 
@@ -114,64 +107,50 @@ And here is the Rust implementation I came up with.
 
 [source,rust]
 ----
-use std::cell::RefCell;
-use std::rc::Rc;
+fn average_of_subtree(root: Option<Rc<RefCell<TreeNode>>>) -> i32 {
+    // vector to store results from intermediate nodes
+    let mut results: Vec<(i32, i32, i32)> = vec![];
+    // Stack to visit all nodes in pre-order traversal
+    let mut stack0: Vec<(Option<Rc<RefCell<TreeNode>>>, Option<usize>)> = vec![(root, None)];
+    // Stack to visit all nodes in post-order traversal
+    let mut stack1: Vec<(Rc<RefCell<TreeNode>>, usize, Option<usize>)> = vec![];
 
-#[derive(Debug, PartialEq, Eq)]
-pub struct TreeNode {
-    pub val: i32,
-    pub left: Option<Rc<RefCell<TreeNode>>>,
-    pub right: Option<Rc<RefCell<TreeNode>>>,
-}
-
-struct Solution;
-
-impl Solution {
-    pub fn average_of_subtree(root: Option<Rc<RefCell<TreeNode>>>) -> i32 {
-        // vector to store results from intermediate nodes
-        let mut results: Vec<(i32, i32, i32)> = vec![];
-        // Stack to visit all nodes in pre-order traversal
-        let mut stack0: Vec<(Option<Rc<RefCell<TreeNode>>>, Option<usize>)> = vec![(root, None)];
-        // Stack to visit all nodes in post-order traversal
-        let mut stack1: Vec<(Rc<RefCell<TreeNode>>, usize, Option<usize>)> = vec![];
-
-        // Iterate over all nodes in pre-order and insert them into stack1 in post-order.
-        while let Some((node, parent_ind)) = stack0.pop() {
-            match node {
-                None => (),
-                Some(node) => {
-                    {
-                        let node = node.borrow();
-                        stack0.push((node.right.clone(), Some(results.len())));
-                        stack0.push((node.left.clone(), Some(results.len())));
-                    }
-                    stack1.push((node, results.len(), parent_ind));
-                    results.push((0, 0, 0));
+    // Iterate over all nodes in pre-order and insert them into stack1 in post-order.
+    while let Some((node, parent_ind)) = stack0.pop() {
+        match node {
+            None => (),
+            Some(node) => {
+                {
+                    let node = node.borrow();
+                    stack0.push((node.right.clone(), Some(results.len())));
+                    stack0.push((node.left.clone(), Some(results.len())));
                 }
+                stack1.push((node, results.len(), parent_ind));
+                results.push((0, 0, 0));
             }
         }
-
-        while let Some((node, my_ind, parent_ind)) = stack1.pop() {
-            let (mut total, mut nodes, mut avg) = results[my_ind];
-            let node = node.borrow();
-            total += node.val;
-            nodes += 1;
-            if total / nodes == node.val {
-                avg += 1;
-            }
-            match parent_ind {
-                None => results[my_ind] = (total, nodes, avg),
-                Some(parent_ind) => {
-                    let (mut ptotal, mut pnodes, mut pavg) = results[parent_ind];
-                    ptotal += total;
-                    pnodes += nodes;
-                    pavg += avg;
-                    results[parent_ind] = (ptotal, pnodes, pavg)
-                }
-            }
-        }
-        results[0].2
     }
+
+    while let Some((node, my_ind, parent_ind)) = stack1.pop() {
+        let (mut total, mut nodes, mut avg) = results[my_ind];
+        let node = node.borrow();
+        total += node.val;
+        nodes += 1;
+        if total / nodes == node.val {
+            avg += 1;
+        }
+        match parent_ind {
+            None => results[my_ind] = (total, nodes, avg),
+            Some(parent_ind) => {
+                let (mut ptotal, mut pnodes, mut pavg) = results[parent_ind];
+                ptotal += total;
+                pnodes += nodes;
+                pavg += avg;
+                results[parent_ind] = (ptotal, pnodes, pavg)
+            }
+        }
+    }
+    results[0].2
 }
 ----
 
