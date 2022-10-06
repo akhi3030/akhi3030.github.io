@@ -168,7 +168,7 @@ fn average_of_subtree(root: Option<Rc<RefCell<TreeNode>>>) -> i32 {
 }
 ----
 
-The main complication with the above algorithm in Rust is that we cannot hash `RefCell<>` which means that we cannot use `HashMap` or `HashSet`.  I do not understand all the details behind this restriction but at a high level it makes sense because `RefCell<>` enables interior mutability so it does not make sense to be able to hash something that can change after we have computed its hash.
+The main complication with the above algorithm in Rust is that we cannot hash `RefCell<T>` which means that we cannot use `HashMap` or `HashSet`.  I do not understand all the details behind this restriction but at a high level it makes sense because `RefCell<T>` enables interior mutability so it does not make sense to be able to hash something that can change after we have computed its hash.
 
 As I could not use a `HashSet` for `visiting`, I ended up using two loops instead.  In the first loop, I lay out all the nodes in the stack in the post order traversal order.  When the first loop finishes, the order in which the nodes will be popped from `stack1` should guarantee that we will always visit children before visiting parents.
 
